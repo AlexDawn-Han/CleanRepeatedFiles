@@ -3,6 +3,9 @@ import hashlib
 from tqdm import tqdm
 import stat
 import sys
+import getpass
+import socket
+from datetime import datetime
 
 def get_file_hash(filepath):
     """计算文件的 SHA256 哈希值"""
@@ -16,16 +19,32 @@ def get_file_hash(filepath):
         print(f"[错误] 无法读取文件 {filepath}: {e}")
         return None
 
+# === 新增：记录删除日志 ===
+def log_deletion(file_path):
+    try:
+        hostname = socket.gethostname()  # 获取设备名
+        username = getpass.getuser()    # 获取当前用户名
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        log_entry = f"[{timestamp}] 用户: {username} @ 设备: {hostname} | 删除文件: {file_path}\n"
+        
+        with open("deletion_log.txt", "a", encoding="utf-8") as log_file:
+            log_file.write(log_entry)
+    except Exception as e:
+        print(f"[警告] 日志记录失败: {e}")
+
 def delete_file(file_path):
     """尝试删除文件，如果失败则尝试强制删除"""
     try:
         os.remove(file_path)
+        log_deletion(file_path)  # <<< 新增：记录删除日志
         return True
     except PermissionError:
         print(f"[提示] 权限不足，尝试强制删除：{file_path}")
         try:
             os.chmod(file_path, stat.S_IWRITE)
             os.remove(file_path)
+            log_deletion(file_path)  # <<< 新增：记录删除日志
             return True
         except Exception as e:
             print(f"[失败] 无法删除文件 {file_path}：{e}")
@@ -121,10 +140,6 @@ def main():
         candidates = file_list.copy()  # 复制一份用于删除
         keep_file = candidates.pop(0)  # 取第一个作为保留文件
 
-        # print(f"\n【组 {idx + 1}/{len(duplicates)}】相同内容文件：")
-        # print(f"将保留文件：{keep_file}")
-
-        # 如果是分组删除模式，询问用户是否删除当前组的重复文件
         if delete_mode == 'group':
             print("\n当前组重复文件：")
             for i, file in enumerate(candidates):
